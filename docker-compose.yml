@@ -1,0 +1,40 @@
+services:
+  # --- BANCO DE DADOS POSTGRESQL ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_DB: meudb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: senha1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- BANCO DE DADOS MONGODB ---
+  mongodb:
+    image: mongo:7
+    container_name: mongo_db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: senha1234
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # --- CACHE / FILAS REDIS ---
+  redis:
+    image: redis:alpine
+    container_name: redis_cache
+    command: redis-server --requirepass senha1234
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
