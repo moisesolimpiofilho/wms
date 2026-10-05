@@ -12,18 +12,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # --- BANCO DE DADOS MONGODB ---
-  mongodb:
-    image: mongo:7
-    container_name: mongo_db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: senha1234
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
   # --- CACHE / FILAS REDIS ---
   redis:
     image: redis:alpine
