@@ -1,5 +1,24 @@
 services:
-  # --- BANCO DE DADOS POSTGRESQL ---
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spring_api
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/meudb
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=senha1234
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=senha1234
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   postgres:
     image: postgres:16-alpine
     container_name: postgres_db
@@ -11,8 +30,13 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d meudb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  # --- CACHE / FILAS REDIS ---
   redis:
     image: redis:alpine
     container_name: redis_cache
@@ -24,5 +48,4 @@ services:
 
 volumes:
   postgres_data:
-  mongo_data:
   redis_data:
