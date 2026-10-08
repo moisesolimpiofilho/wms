@@ -35,13 +35,10 @@ public class SecurityConfig {
                     SessionCreationPolicy.STATELESS
                 )
             )
+            // Para os endpoints de register ou login, libera pois não tem token
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/auth/register","/auth/login"
-                )
-                .permitAll()
-                .anyRequest()
-                .authenticated()
+                .requestMatchers("/auth/register","/auth/login").permitAll()
+                .anyRequest().authenticated() // Para outras requisições precisa estar autenticado 
             )
             .addFilterBefore(
                 jwtAuthenticationFilter,
