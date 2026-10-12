@@ -28,8 +28,5 @@ public class Produto extends BaseEntity {
     private Long unitMeasureId;
 
     @Column(nullable = false)
-    private Boolean active;
-
-    @Column(nullable = false)
     private Boolean batchControl;
 }

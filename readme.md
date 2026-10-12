@@ -111,6 +111,22 @@ spring.data.redis.password=senha1234
 
 ---
 
+## 📦 Redis no `warehouse_module`
+
+O `MotivoMovimentacaoCacheService` consulta o Redis antes de buscar um motivo pelo código no repositório JPA. Em caso de cache miss, o resultado encontrado no banco é gravado no Redis com TTL padrão de 30 minutos. Esse prazo pode ser alterado pela propriedade `warehouse.cache.motivo-movimentacao.ttl` usando um valor `Duration`, por exemplo `PT15M`.
+
+O `RedisTransactionStore` grava cada `TransactionLog` em `warehouse:transactions:<transactionId>`, sem expiração, e permite recuperá-lo pelo identificador. O identificador é tratado como único no Redis; tentar gravar uma transação com chave existente gera erro em vez de substituir o registro.
+
+O `EtiquetaService` oferece operações de entrada, saída parcial e consulta de etiquetas por código. Entradas inicializam o saldo disponível e geram movimentação e transação; saídas rejeitam saldo insuficiente e desativam a etiqueta quando o saldo chega a zero. Os testes unitários mockam os repositórios JPA e o `RedisTransactionStore`.
+
+Para executar os testes unitários dos serviços:
+
+```bash
+mvn -f warehouse_module/pom.xml test
+```
+
+---
+
 ## 🛑 Gerenciamento do Ambiente
 
 ### Visualizar Logs

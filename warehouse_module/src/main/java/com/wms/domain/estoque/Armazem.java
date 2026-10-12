@@ -13,5 +13,4 @@ public class Armazem extends BaseEntity {
     @Column(nullable = false) private Long centerDistributionId;
     @Column(nullable = false, unique = true) private String code;
     @Column(nullable = false) private String description;
-    @Column(nullable = false) private Boolean active;
 }

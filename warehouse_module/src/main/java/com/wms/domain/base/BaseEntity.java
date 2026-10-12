@@ -23,4 +23,7 @@ public abstract class BaseEntity {
 
     @Column(name = "last_change_date")
     private LocalDateTime lastChangeDate; 
+
+    @Column(name = "active", nullable = false, columnDefinition = "boolean default true")
+    private Boolean active = true;
 }

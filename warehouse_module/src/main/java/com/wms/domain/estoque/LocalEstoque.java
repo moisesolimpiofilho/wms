@@ -27,6 +27,4 @@ public class LocalEstoque extends BaseEntity {
     @Column(precision = 19, scale = 4)
     private BigDecimal capacity;
 
-    @Column(nullable = false)
-    private Boolean active;
 }

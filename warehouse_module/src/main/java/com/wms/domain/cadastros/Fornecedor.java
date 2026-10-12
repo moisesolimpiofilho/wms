@@ -13,5 +13,4 @@ public class Fornecedor extends BaseEntity {
     @Column(nullable = false, unique = true) private String code;
     @Column(nullable = false) private String name;
     @Column private String document; // CNPJ ou CPF
-    @Column(nullable = false) private Boolean active;
 }

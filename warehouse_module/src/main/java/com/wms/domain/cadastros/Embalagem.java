@@ -27,6 +27,4 @@ public class Embalagem extends BaseEntity {
     @Column(precision = 19, scale = 4)
     private BigDecimal weight;
 
-    @Column(nullable = false)
-    private Boolean active; 
 }

@@ -23,6 +23,4 @@ public class Selo extends BaseEntity {
     @Column(nullable = false, precision = 19, scale = 4) private BigDecimal quantityCanceled;
     @Column(nullable = false, precision = 19, scale = 4) private BigDecimal quantityAvailable;
     @Column(precision = 19, scale = 4) private BigDecimal weight;
-    @Column(nullable = false) private Boolean active;
 }
-

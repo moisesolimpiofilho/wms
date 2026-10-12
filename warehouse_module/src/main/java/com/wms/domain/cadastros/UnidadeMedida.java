@@ -13,5 +13,4 @@ public class UnidadeMedida extends BaseEntity {
     @Column(nullable = false, unique = true) private String code;
     @Column(nullable = false) private String description;
     @Column(nullable = false) private String symbol;
-    @Column(nullable = false) private Boolean active;
 }

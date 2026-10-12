@@ -17,5 +17,4 @@ public class Lote extends BaseEntity {
     @Column(nullable = false) private String code;
     @Column private LocalDateTime manufacturingDate;
     @Column private LocalDateTime expirationDate;
-    @Column(nullable = false) private Boolean active;
 }
