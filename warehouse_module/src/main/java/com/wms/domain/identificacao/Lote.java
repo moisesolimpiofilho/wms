@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = true)
 public class Lote extends BaseEntity {
     @Column(nullable = false) private Long productId;
-    @Column(nullable = false) private String code;
+    @Column(nullable = false, unique = true) private String code;
     @Column private LocalDateTime manufacturingDate;
     @Column private LocalDateTime expirationDate;
 }

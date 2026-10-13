@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.Main;
 import com.wms.domain.auditoria.TransactionLog;
 import com.wms.domain.base.BaseEntity;
+import com.wms.api.base.EntityRequestValidator;
 import com.wms.domain.cadastros.Categoria;
 import com.wms.domain.cadastros.Cliente;
 import com.wms.domain.cadastros.Embalagem;
@@ -36,6 +37,7 @@ import com.wms.domain.operacoes.itens.PedidoItem;
 import com.wms.domain.operacoes.itens.RecebimentoItem;
 import com.wms.domain.operacoes.itens.SeparacaoItem;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Column;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +61,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -96,10 +99,137 @@ class CrudEndpointsIntegrationTest {
     private ApplicationContext springContext;
 
     private MockMvc mockMvc;
+    private final Map<Class<?>, Long> seededReferenceIds = new HashMap<>();
 
     @BeforeEach
     void setUpMockMvc() {
         mockMvc = MockMvcBuilders.webAppContextSetup(applicationContext).build();
+        seededReferenceIds.clear();
+    }
+
+    @Test
+    @Transactional
+    void rejectsDuplicateCodeForTheSameEntity() throws Exception {
+        Map<String, Object> payload = validPayload(Cliente.class);
+        payload.put("code", "CLIENTE-DUPLICADO");
+
+        mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @Transactional
+    void rejectsUpdatingAnEntityWithAnotherEntitiesCode() throws Exception {
+        Map<String, Object> firstClient = validPayload(Cliente.class);
+        firstClient.put("code", "CLIENTE-ORIGINAL");
+        mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstClient)))
+                .andExpect(status().isCreated());
+
+        Map<String, Object> secondClient = validPayload(Cliente.class);
+        secondClient.put("code", "CLIENTE-SECUNDARIO");
+        String created = mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondClient)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long secondClientId = objectMapper.readTree(created).get("id").asLong();
+
+        secondClient.put("code", "CLIENTE-ORIGINAL");
+        mockMvc.perform(put("/api/clientes/" + secondClientId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondClient)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @Transactional
+    void rejectsInvalidCpfAndCnpj() throws Exception {
+        for (String document : new String[]{"123.456.789-00", "11.222.333/0001-82"}) {
+            Map<String, Object> payload = validPayload(Cliente.class);
+            payload.put("document", document);
+            mockMvc.perform(post("/api/clientes")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(payload)))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    @Transactional
+    void acceptsAndNormalizesValidCpfAndCnpj() throws Exception {
+        Map<String, Object> client = validPayload(Cliente.class);
+        client.put("document", "529.982.247-25");
+        mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(client)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.document").value("52998224725"));
+
+        Map<String, Object> supplier = validPayload(Fornecedor.class);
+        supplier.put("document", "11.222.333/0001-81");
+        mockMvc.perform(post("/api/fornecedores")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(supplier)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.document").value("11222333000181"));
+    }
+
+    @Test
+    @Transactional
+    void rejectsDuplicateCpfAfterNormalizingMask() throws Exception {
+        Map<String, Object> client = validPayload(Cliente.class);
+        client.put("document", "529.982.247-25");
+        mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(client)))
+                .andExpect(status().isCreated());
+
+        client.put("code", "OUTRO-CLIENTE");
+        client.put("document", "52998224725");
+        mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(client)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @Transactional
+    void rejectsDuplicateCnpjForSuppliers() throws Exception {
+        Map<String, Object> supplier = validPayload(Fornecedor.class);
+        supplier.put("document", "11.222.333/0001-81");
+        mockMvc.perform(post("/api/fornecedores")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(supplier)))
+                .andExpect(status().isCreated());
+
+        supplier.put("code", "OUTRO-FORNECEDOR");
+        supplier.put("document", "11222333000181");
+        mockMvc.perform(post("/api/fornecedores")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(supplier)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @Transactional
+    void rejectsReferencesToMissingRecordsEvenForOptionalFields() throws Exception {
+        Map<String, Object> product = validPayload(Produto.class);
+        product.put("segmentId", Long.MAX_VALUE);
+
+        mockMvc.perform(post("/api/produtos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(product)))
+                .andExpect(status().isBadRequest());
     }
 
     @ParameterizedTest(name = "{0} supports the complete CRUD lifecycle")
@@ -234,7 +364,24 @@ class CrudEndpointsIntegrationTest {
                 if (Modifier.isStatic(field.getModifiers()) || "id".equals(field.getName())) {
                     continue;
                 }
-                payload.put(field.getName(), sampleValue(field.getType(), field.getName()));
+                payload.put(field.getName(), "document".equals(field.getName())
+                        ? null
+                        : sampleValue(field.getType(), field.getName()));
+            }
+        }
+        for (Class<?> current = entityType; current != null && current != Object.class;
+             current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                Class<?> referenceType = field.getType() == Long.class
+                        ? EntityRequestValidator.referenceType(entityType, field.getName())
+                        : null;
+                if (referenceType == null) {
+                    continue;
+                }
+
+                Column column = field.getAnnotation(Column.class);
+                boolean required = column != null && !column.nullable();
+                payload.put(field.getName(), required ? seedEntity(referenceType) : null);
             }
         }
         payload.put("userNameCreator", "crud-integration-test");
@@ -242,6 +389,56 @@ class CrudEndpointsIntegrationTest {
         payload.put("creationDate", LocalDateTime.now().toString());
         payload.put("lastChangeDate", LocalDateTime.now().toString());
         return payload;
+    }
+
+    private Long seedEntity(Class<?> entityType) {
+        Long existingId = seededReferenceIds.get(entityType);
+        if (existingId != null) {
+            return existingId;
+        }
+
+        try {
+            BaseEntity entity = (BaseEntity) entityType.getDeclaredConstructor().newInstance();
+            for (Class<?> current = entityType; current != null && current != Object.class;
+                 current = current.getSuperclass()) {
+                for (Field field : current.getDeclaredFields()) {
+                    if (Modifier.isStatic(field.getModifiers()) || "id".equals(field.getName())) {
+                        continue;
+                    }
+
+                    field.setAccessible(true);
+                    Class<?> referenceType = field.getType() == Long.class
+                            ? EntityRequestValidator.referenceType(entityType, field.getName())
+                            : null;
+                    if (referenceType != null) {
+                        Column column = field.getAnnotation(Column.class);
+                        boolean required = column != null && !column.nullable();
+                        field.set(entity, required ? seedEntity(referenceType) : null);
+                    } else {
+                        field.set(entity, sampleEntityValue(field.getType(), field.getName()));
+                    }
+                }
+            }
+            entityManager.persist(entity);
+            entityManager.flush();
+            seededReferenceIds.put(entityType, entity.getId());
+            return entity.getId();
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Could not create fixture for " + entityType.getName(), exception);
+        }
+    }
+
+    private Object sampleEntityValue(Class<?> fieldType, String fieldName) {
+        if (fieldType == LocalDateTime.class) {
+            return LocalDateTime.now();
+        }
+        if (fieldType.isEnum()) {
+            return fieldType.getEnumConstants()[0];
+        }
+        if ("document".equals(fieldName)) {
+            return null;
+        }
+        return sampleValue(fieldType, fieldName);
     }
 
     private Object sampleValue(Class<?> fieldType, String fieldName) {

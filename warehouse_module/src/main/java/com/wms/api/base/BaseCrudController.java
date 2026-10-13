@@ -18,10 +18,12 @@ import java.util.List;
 public abstract class BaseCrudController<T extends BaseEntity> {
     private final EntityManager entityManager;
     private final Class<T> entityType;
+    private final EntityRequestValidator requestValidator;
 
     protected BaseCrudController(EntityManager entityManager, Class<T> entityType) {
         this.entityManager = entityManager;
         this.entityType = entityType;
+        this.requestValidator = new EntityRequestValidator(entityManager);
     }
 
     @GetMapping
@@ -43,6 +45,7 @@ public abstract class BaseCrudController<T extends BaseEntity> {
     @Transactional
     public ResponseEntity<T> criar(@RequestBody T entity) {
         entity.setId(null);
+        requestValidator.validate(entity, entityType);
         if (entity.getActive() == null) {
             entity.setActive(true);
         }
@@ -63,6 +66,7 @@ public abstract class BaseCrudController<T extends BaseEntity> {
         }
 
         entity.setId(id);
+        requestValidator.validate(entity, entityType);
         if (entity.getActive() == null) {
             entity.setActive(currentEntity.getActive());
         }
