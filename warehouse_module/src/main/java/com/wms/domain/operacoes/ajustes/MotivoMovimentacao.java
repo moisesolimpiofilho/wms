@@ -4,7 +4,6 @@ import com.wms.domain.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import java.math.BigDecimal;
 
 @Data
 @Entity

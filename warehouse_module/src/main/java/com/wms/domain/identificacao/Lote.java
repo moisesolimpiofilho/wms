@@ -1,11 +1,9 @@
 package com.wms.domain.identificacao;
 
 import com.wms.domain.base.BaseEntity;
-import com.wms.domain.enums.MovementType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
