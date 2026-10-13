@@ -36,17 +36,22 @@ import com.wms.domain.operacoes.itens.PedidoItem;
 import com.wms.domain.operacoes.itens.RecebimentoItem;
 import com.wms.domain.operacoes.itens.SeparacaoItem;
 import jakarta.persistence.EntityManager;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.aop.support.AopUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -86,6 +91,9 @@ class CrudEndpointsIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private ApplicationContext springContext;
 
     private MockMvc mockMvc;
 
@@ -186,8 +194,36 @@ class CrudEndpointsIntegrationTest {
             assertTrue(itemPath.has("get"), endpoint.path() + "/{id} should document GET");
             assertTrue(itemPath.has("put"), endpoint.path() + "/{id} should document PUT");
             assertTrue(itemPath.has("delete"), endpoint.path() + "/{id} should document DELETE");
+            assertOperationHasEntityDocumentation(collectionPath.path("get"), endpoint.path() + " GET", endpoint.path());
+            assertOperationHasEntityDocumentation(collectionPath.path("post"), endpoint.path() + " POST", endpoint.path());
+            assertOperationHasEntityDocumentation(itemPath.path("get"), endpoint.path() + "/{id} GET", endpoint.path());
+            assertOperationHasEntityDocumentation(itemPath.path("put"), endpoint.path() + "/{id} PUT", endpoint.path());
+            assertOperationHasEntityDocumentation(itemPath.path("delete"), endpoint.path() + "/{id} DELETE", endpoint.path());
         }
         assertEquals(31, entityEndpoints().count());
+    }
+
+    private void assertOperationHasEntityDocumentation(JsonNode operation, String endpoint, String resourcePath) {
+        assertTrue(operation.path("summary").isTextual(), endpoint + " should have a summary");
+        JsonNode tags = operation.path("tags");
+        assertTrue(tags.isArray() && !tags.isEmpty(),
+                endpoint + " should be grouped by an entity tag");
+        assertEquals(1, tags.size(), endpoint + " should belong to exactly one Swagger group");
+        assertEquals(entityTagFor(resourcePath), tags.get(0).asText(),
+                endpoint + " should be grouped under its entity tag");
+        assertFalse(tags.toString().contains("\"CRUD\""),
+                endpoint + " should not be grouped under the generic CRUD tag");
+    }
+
+    private String entityTagFor(String resourcePath) {
+        return springContext.getBeansWithAnnotation(RestController.class).values().stream()
+                .map(AopUtils::getTargetClass)
+                .filter(controller -> controller.isAnnotationPresent(RequestMapping.class))
+                .filter(controller -> controller.isAnnotationPresent(Tag.class))
+                .filter(controller -> controller.getAnnotation(RequestMapping.class).value()[0].equals(resourcePath))
+                .map(controller -> controller.getAnnotation(Tag.class).name())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No entity Swagger tag found for " + resourcePath));
     }
 
     private Map<String, Object> validPayload(Class<? extends BaseEntity> entityType) {
