@@ -2,6 +2,7 @@ package com.wms.api.cadastros;
 
 import com.wms.domain.cadastros.Categoria;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -9,6 +10,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -28,6 +30,10 @@ class CategoriaControllerTest {
     @BeforeEach
     void setUp() {
         entityManager = mock(EntityManager.class);
+        TypedQuery<Long> uniquenessQuery = mock(TypedQuery.class);
+        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(uniquenessQuery);
+        when(uniquenessQuery.setParameter(anyString(), any())).thenReturn(uniquenessQuery);
+        when(uniquenessQuery.getSingleResult()).thenReturn(0L);
         mockMvc = MockMvcBuilders.standaloneSetup(new CategoriaController(entityManager)).build();
     }
 
