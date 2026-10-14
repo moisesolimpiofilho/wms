@@ -1,7 +1,9 @@
+version: '3.8'
+
 services:
   auth:
     build:
-      context: .
+      context: ./auth
       dockerfile: Dockerfile
     container_name: auth_api
     ports:
@@ -13,31 +15,36 @@ services:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
       - SPRING_DATA_REDIS_PASSWORD=senha1234
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
   warehouse:
     build:
-      context: .
-      dockerfile: warehouse_module/Dockerfile
+      context: ./warehouse_module
+      dockerfile: Dockerfile
     container_name: warehouse_api
     ports:
       - "8083:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/meudb
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: senha1234
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: senha1234
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/meudb
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=senha1234
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=senha1234
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_SERVICE_URL=http://auth:8082
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      auth:
+        condition: service_started
 
   postgres:
     image: postgres:16-alpine
