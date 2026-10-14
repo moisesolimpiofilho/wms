@@ -133,25 +133,6 @@ Base URL: `http://localhost:8082`
 
 ---
 
-### `GET /auth/me` — Dados do usuário autenticado
-
-**Header:**
-```
-Authorization: Bearer <token>
-```
-
-**Sucesso — `200 OK`:**
-```json
-{
-  "username": "joao"
-}
-```
-
-**Sem token / token inválido — `401 Unauthorized`**
-**Autenticado mas sem permissão — `403 Forbidden`**
-
----
-
 ### Exemplos com `curl`
 
 ```bash
@@ -164,10 +145,6 @@ curl -X POST http://localhost:8082/auth/register \
 curl -X POST http://localhost:8082/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"joao","password":"senhaSegura123"}'
-
-# Endpoint protegido
-curl http://localhost:8082/auth/me \
-  -H "Authorization: Bearer <token>"
 ```
 
 ---

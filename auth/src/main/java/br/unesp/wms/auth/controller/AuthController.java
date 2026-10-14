@@ -4,7 +4,6 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,7 +13,6 @@ import br.unesp.wms.auth.repository.UserRepository;
 import br.unesp.wms.auth.security.JwtService;
 import lombok.RequiredArgsConstructor;
 
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -65,13 +63,6 @@ public class AuthController {
             .body(Map.of(
                 "token", token
             ));
-    }
-
-    @GetMapping("/me")
-    public Map<String, String> me(Authentication authentication) {
-        return Map.of(
-            "username", authentication.getName()
-        );
     }
 }
 

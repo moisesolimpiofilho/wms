@@ -27,7 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             String authorization = request.getHeader("Authorization");
 
-            // Sem token, ou Header, segue a request não permitido
+            // Sem token, ou Header, segue a request (Caso do register)
             if (authorization == null || !authorization.startsWith("Bearer ")) {
                 filterChain.doFilter(request, response);
                 return;
