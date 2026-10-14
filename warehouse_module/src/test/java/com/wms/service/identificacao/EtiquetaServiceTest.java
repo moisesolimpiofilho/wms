@@ -35,12 +35,14 @@ class EtiquetaServiceTest {
     private MovimentacaoEstoqueRepository movimentacaoRepository;
     @Mock
     private RedisTransactionStore transactionStore;
+    @Mock
+    private com.wms.service.cache.SeloCacheService seloCacheService;
 
     private EtiquetaService service;
 
     @BeforeEach
     void setUp() {
-        service = new EtiquetaService(seloRepository, movimentacaoRepository, transactionStore);
+        service = new EtiquetaService(seloRepository, movimentacaoRepository, transactionStore, seloCacheService);
     }
 
     @Test
@@ -87,6 +89,7 @@ class EtiquetaServiceTest {
                         && transaction.getMovementType() == MovementType.ENTRADA
                         && transaction.getQuantity().equals(new BigDecimal("12.5000"))
                         && transaction.getUserId().equals(USER_ID)));
+        verify(seloCacheService).cache(any(Selo.class));
     }
 
     @Test
@@ -146,6 +149,7 @@ class EtiquetaServiceTest {
                         && transaction.getMovementType() == MovementType.SAIDA
                         && transaction.getQuantity().equals(new BigDecimal("3.2500"))
                         && transaction.getUserId().equals(USER_ID)));
+        verify(seloCacheService).cache(any(Selo.class));
     }
 
     @Test

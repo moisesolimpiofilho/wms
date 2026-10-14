@@ -12,6 +12,7 @@ import com.wms.repository.estoque.EstoqueRepository;
 import com.wms.repository.identificacao.MovimentacaoEstoqueRepository;
 import com.wms.repository.operacoes.OrdemEstoqueItemRepository;
 import com.wms.repository.operacoes.OrdemEstoqueRepository;
+import com.wms.service.cache.EstoqueCacheService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,16 +27,19 @@ public class OrderMovementProcessor {
     private final OrdemEstoqueItemRepository orderItemRepository;
     private final MovimentacaoEstoqueRepository movementRepository;
     private final EstoqueRepository stockRepository;
+    private final EstoqueCacheService estoqueCacheService;
 
     public OrderMovementProcessor(
             OrdemEstoqueRepository orderRepository,
             OrdemEstoqueItemRepository orderItemRepository,
             MovimentacaoEstoqueRepository movementRepository,
-            EstoqueRepository stockRepository) {
+            EstoqueRepository stockRepository,
+            EstoqueCacheService estoqueCacheService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.movementRepository = movementRepository;
         this.stockRepository = stockRepository;
+        this.estoqueCacheService = estoqueCacheService;
     }
 
     @Transactional
@@ -137,6 +141,7 @@ public class OrderMovementProcessor {
             stock.setWeight((stock.getWeight() == null ? BigDecimal.ZERO : stock.getWeight()).add(request.weight()));
         }
         stockRepository.save(stock);
+        estoqueCacheService.cache(stock);
     }
 
     private void registerExit(OrderMovementRequest request, List<Estoque> stockEntries, LocalDateTime now) {
@@ -174,6 +179,7 @@ public class OrderMovementProcessor {
             }
             setModificationAuditFields(stock, request.userName(), now);
             stockRepository.save(stock);
+            estoqueCacheService.cache(stock);
             remaining = remaining.subtract(deducted);
         }
     }

@@ -10,6 +10,7 @@ import com.wms.repository.estoque.EstoqueRepository;
 import com.wms.repository.identificacao.MovimentacaoEstoqueRepository;
 import com.wms.repository.operacoes.OrdemEstoqueItemRepository;
 import com.wms.repository.operacoes.OrdemEstoqueRepository;
+import com.wms.service.cache.EstoqueCacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,13 +36,15 @@ class OrderMovementProcessorTest {
     private MovimentacaoEstoqueRepository movementRepository;
     @Mock
     private EstoqueRepository stockRepository;
+    @Mock
+    private EstoqueCacheService estoqueCacheService;
 
     private OrderMovementProcessor processor;
 
     @BeforeEach
     void setUp() {
         processor = new OrderMovementProcessor(
-                orderRepository, orderItemRepository, movementRepository, stockRepository);
+                orderRepository, orderItemRepository, movementRepository, stockRepository, estoqueCacheService);
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.wms.domain.identificacao.MovimentacaoEstoque;
 import com.wms.domain.identificacao.Selo;
 import com.wms.repository.identificacao.MovimentacaoEstoqueRepository;
 import com.wms.repository.identificacao.SeloRepository;
+import com.wms.service.cache.SeloCacheService;
 import com.wms.service.transaction.RedisTransactionStore;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +22,17 @@ public class EtiquetaService {
     private final SeloRepository seloRepository;
     private final MovimentacaoEstoqueRepository movimentacaoRepository;
     private final RedisTransactionStore transactionStore;
+    private final SeloCacheService seloCacheService;
 
     public EtiquetaService(
             SeloRepository seloRepository,
             MovimentacaoEstoqueRepository movimentacaoRepository,
-            RedisTransactionStore transactionStore) {
+            RedisTransactionStore transactionStore,
+            SeloCacheService seloCacheService) {
         this.seloRepository = seloRepository;
         this.movimentacaoRepository = movimentacaoRepository;
         this.transactionStore = transactionStore;
+        this.seloCacheService = seloCacheService;
     }
 
     @Transactional
@@ -68,6 +72,7 @@ public class EtiquetaService {
         selo.setActive(true);
         setCreationAuditFields(selo, userName, now);
         Selo savedSelo = seloRepository.save(selo);
+        seloCacheService.cache(savedSelo);
 
         MovimentacaoEstoque movement = new MovimentacaoEstoque();
         movement.setProductId(productId);
@@ -107,6 +112,7 @@ public class EtiquetaService {
         }
         setModificationAuditFields(selo, userName, now);
         Selo savedSelo = seloRepository.save(selo);
+        seloCacheService.cache(savedSelo);
 
         MovimentacaoEstoque movement = new MovimentacaoEstoque();
         movement.setProductId(selo.getProductId());
