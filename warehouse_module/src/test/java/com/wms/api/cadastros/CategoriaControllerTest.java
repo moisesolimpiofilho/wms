@@ -67,6 +67,8 @@ class CategoriaControllerTest {
                                   "id": 99,
                                   "code": "ALIMENTOS",
                                   "description": "Alimentos",
+                                  "userNameCreator": "controller-test",
+                                  "userNameLastChange": "controller-test",
                                   "active": true
                                 }
                                 """))
@@ -89,6 +91,8 @@ class CategoriaControllerTest {
                                   "id": 99,
                                   "code": "BEBIDAS",
                                   "description": "Bebidas",
+                                  "userNameCreator": "controller-test",
+                                  "userNameLastChange": "controller-test",
                                   "active": true
                                 }
                                 """))

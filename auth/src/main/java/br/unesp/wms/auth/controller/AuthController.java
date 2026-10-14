@@ -10,18 +10,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-
 import br.unesp.wms.auth.entity.User;
 import br.unesp.wms.auth.repository.UserRepository;
 import br.unesp.wms.auth.security.JwtService;
 import br.unesp.wms.dto.AuthRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
 
 @RestController 
 @RequestMapping("/auth")
-@RequiredArgsConstructor 
 @Tag(name = "Autenticação", description = "Endpoints para registro de novos usuários e geração de token JWT")
 public class AuthController {
 
@@ -29,9 +26,18 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+    }
+
     @PostMapping("/register")
     @Operation(summary = "Registrar novo usuário", description = "Cria um novo usuário na base de dados encriptando a senha enviada")
-    public void register(@RequestBody AuthRequest request) {
+    public ResponseEntity<Void> register(@RequestBody AuthRequest request) {
+        if (request == null || isBlank(request.getUsername()) || isBlank(request.getPassword())) {
+            return ResponseEntity.badRequest().build();
+        }
         
         User user = new User();
         user.setUsername(request.getUsername());
@@ -40,12 +46,16 @@ public class AuthController {
         );
 
         userRepository.save(user);
+        return ResponseEntity.ok().build();
     }
     
     @PostMapping("/login")
     @Operation(summary = "Realizar login", description = "Valida as credenciais do usuário e retorna o token JWT para autenticação")
     public ResponseEntity<?> login(@RequestBody AuthRequest request) {
-        
+        if (request == null || isBlank(request.getUsername()) || isBlank(request.getPassword())) {
+            return ResponseEntity.badRequest().build();
+        }
+
         User user = userRepository
             .findByUsername(request.getUsername())
             .orElse(null);
@@ -66,5 +76,9 @@ public class AuthController {
             .body(Map.of(
                 "token", token
             ));
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

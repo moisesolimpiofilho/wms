@@ -62,6 +62,8 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -288,6 +290,55 @@ class CrudEndpointsIntegrationTest {
         assertFalse(deletedEntity.getActive(), "Soft delete must set active=false");
     }
 
+    @ParameterizedTest(name = "{0} rejects blank required String fields on POST and PUT")
+    @MethodSource("entityEndpoints")
+    @Transactional
+    void rejectsBlankRequiredStringFields(Endpoint endpoint) throws Exception {
+        Map<String, Object> validPayload = validPayload(endpoint.entityType());
+        String createdJson = mockMvc.perform(post(endpoint.path())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validPayload)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long id = objectMapper.readTree(createdJson).get("id").asLong();
+
+        List<String> requiredFields = requiredStringFields(endpoint.entityType());
+        assertFalse(requiredFields.isEmpty(), endpoint.entityType().getSimpleName()
+                + " should have required String fields, including inherited audit fields");
+        for (String field : requiredFields) {
+            for (String invalidValue : new String[]{"", "   \t", null}) {
+                Map<String, Object> invalidPayload = new LinkedHashMap<>(validPayload);
+                invalidPayload.put(field, invalidValue);
+
+                mockMvc.perform(post(endpoint.path())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidPayload)))
+                        .andExpect(status().isBadRequest());
+
+                mockMvc.perform(put(endpoint.path() + "/" + id)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(invalidPayload)))
+                        .andExpect(status().isBadRequest());
+            }
+        }
+    }
+
+    @Test
+    @Transactional
+    void acceptsBlankOptionalStringField() throws Exception {
+        for (String optionalValue : new String[]{"", "   "}) {
+            Map<String, Object> payload = validPayload(LocalEstoque.class);
+            payload.put("description", optionalValue);
+            mockMvc.perform(post("/api/locais-estoque")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(payload)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.description").value(optionalValue));
+        }
+    }
+
     @ParameterizedTest(name = "{0} returns 404 for missing records")
     @MethodSource("entityEndpoints")
     void returnsNotFoundForMissingRecords(Endpoint endpoint) throws Exception {
@@ -335,6 +386,10 @@ class CrudEndpointsIntegrationTest {
 
     private void assertOperationHasEntityDocumentation(JsonNode operation, String endpoint, String resourcePath) {
         assertTrue(operation.path("summary").isTextual(), endpoint + " should have a summary");
+        assertTrue(operation.path("responses").has("403"),
+                endpoint + " should document the forbidden response");
+        assertTrue(operation.path("responses").path("403").path("description").isTextual(),
+                endpoint + " should describe the forbidden response");
         JsonNode tags = operation.path("tags");
         assertTrue(tags.isArray() && !tags.isEmpty(),
                 endpoint + " should be grouped by an entity tag");
@@ -389,6 +444,20 @@ class CrudEndpointsIntegrationTest {
         payload.put("creationDate", LocalDateTime.now().toString());
         payload.put("lastChangeDate", LocalDateTime.now().toString());
         return payload;
+    }
+
+    private List<String> requiredStringFields(Class<?> entityType) {
+        List<String> requiredFields = new ArrayList<>();
+        for (Class<?> current = entityType; current != null && current != Object.class;
+             current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                Column column = field.getAnnotation(Column.class);
+                if (field.getType() == String.class && column != null && !column.nullable()) {
+                    requiredFields.add(field.getName());
+                }
+            }
+        }
+        return requiredFields;
     }
 
     private Long seedEntity(Class<?> entityType) {
