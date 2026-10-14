@@ -1,9 +1,9 @@
 services:
-  api:
+  auth:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: spring_api
+    container_name: auth_api
     ports:
       - "8082:8082"
     environment:
@@ -18,6 +18,26 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+
+  warehouse:
+    build:
+      context: .
+      dockerfile: warehouse_module/Dockerfile
+    container_name: warehouse_api
+    ports:
+      - "8083:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/meudb
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: senha1234
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: senha1234
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine
@@ -45,6 +65,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "senha1234", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres_data:

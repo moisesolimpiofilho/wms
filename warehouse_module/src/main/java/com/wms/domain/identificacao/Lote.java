@@ -1,0 +1,18 @@
+package com.wms.domain.identificacao;
+
+import com.wms.domain.base.BaseEntity;
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import java.time.LocalDateTime;
+
+@Data
+@Entity
+@Table(name = "lote")
+@EqualsAndHashCode(callSuper = true)
+public class Lote extends BaseEntity {
+    @Column(nullable = false) private Long productId;
+    @Column(nullable = false, unique = true) private String code;
+    @Column private LocalDateTime manufacturingDate;
+    @Column private LocalDateTime expirationDate;
+}
