@@ -52,10 +52,20 @@ public class CategoriaController extends BaseCrudController<Categoria> {
     @PostMapping
     @Operation(summary = "Criar categoria", description = "Cria uma categoria. O ID informado no corpo é ignorado.")
     @ApiResponse(responseCode = "201", description = "Categoria criada com sucesso")
+    @ApiResponse(responseCode = "404", description = "Dados da categoria inválidos")
     public ResponseEntity<Categoria> criar(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "Dados da categoria", required = true)
             @RequestBody Categoria entity) {
+
+        if (entity == null
+                || entity.getCode() == null
+                || entity.getCode().isBlank()
+                || entity.getDescription() == null
+                || entity.getDescription().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
         return super.criar(entity);
     }
 
@@ -64,6 +74,7 @@ public class CategoriaController extends BaseCrudController<Categoria> {
     @Operation(summary = "Atualizar categoria", description = "Atualiza uma categoria ativa.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Categoria atualizada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados da categoria inválidos"),
             @ApiResponse(responseCode = "404", description = "Categoria não encontrada ou inativa")
     })
     public ResponseEntity<Categoria> atualizar(
@@ -71,6 +82,15 @@ public class CategoriaController extends BaseCrudController<Categoria> {
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "Dados atualizados da categoria", required = true)
             @RequestBody Categoria entity) {
+
+        if (entity == null
+                || entity.getCode() == null
+                || entity.getCode().isBlank()
+                || entity.getDescription() == null
+                || entity.getDescription().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        
         return super.atualizar(id, entity);
     }
 
