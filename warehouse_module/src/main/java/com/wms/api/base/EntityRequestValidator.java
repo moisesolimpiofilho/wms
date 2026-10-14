@@ -24,6 +24,7 @@ import com.wms.domain.operacoes.Separacao;
 import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 import com.wms.domain.operacoes.complementos.OrdemEstoqueItem;
 import com.wms.domain.operacoes.itens.PedidoItem;
+import jakarta.persistence.Column;
 import jakarta.persistence.EntityManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -67,9 +68,31 @@ public class EntityRequestValidator {
     }
 
     public void validate(Object entity, Class<?> entityType) {
+        if (entity == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O corpo da requisição é obrigatório.");
+        }
+        validateRequiredStrings(entity, entityType);
         validateUniqueField(entity, entityType, "code", false);
         validateUniqueField(entity, entityType, "document", true);
         validateReferences(entity, entityType);
+    }
+
+    private void validateRequiredStrings(Object entity, Class<?> entityType) {
+        for (Class<?> current = entityType; current != null && current != Object.class;
+             current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                Column column = field.getAnnotation(Column.class);
+                if (field.getType() != String.class || column == null || column.nullable()) {
+                    continue;
+                }
+
+                Object value = getValue(field, entity);
+                if (value == null || ((String) value).isBlank()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            field.getName() + " é obrigatório e não pode estar vazio.");
+                }
+            }
+        }
     }
 
     public static Class<?> referenceType(Class<?> ownerType, String fieldName) {

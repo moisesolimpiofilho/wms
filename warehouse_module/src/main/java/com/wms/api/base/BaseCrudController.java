@@ -44,6 +44,9 @@ public abstract class BaseCrudController<T extends BaseEntity> {
     @PostMapping
     @Transactional
     public ResponseEntity<T> criar(@RequestBody T entity) {
+        if (entity == null) {
+            return ResponseEntity.badRequest().build();
+        }
         entity.setId(null);
         requestValidator.validate(entity, entityType);
         if (entity.getActive() == null) {
@@ -65,6 +68,9 @@ public abstract class BaseCrudController<T extends BaseEntity> {
             return ResponseEntity.notFound().build();
         }
 
+        if (entity == null) {
+            return ResponseEntity.badRequest().build();
+        }
         entity.setId(id);
         requestValidator.validate(entity, entityType);
         if (entity.getActive() == null) {

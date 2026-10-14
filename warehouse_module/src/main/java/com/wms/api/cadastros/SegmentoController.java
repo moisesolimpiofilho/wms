@@ -38,7 +38,7 @@ public class SegmentoController extends BaseCrudController<Segmento> {
     @GetMapping("/{id}")
     @Operation(summary = "Consultar segmento", description = "Busca um segmento ativo pelo ID.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Segmento encontrado"),
-            @ApiResponse(responseCode = "404", description = "Segmento não encontrado ou inativo")})
+                   @ApiResponse(responseCode = "404", description = "Segmento não encontrado ou inativo")})
     public ResponseEntity<Segmento> buscarPorId(
             @Parameter(description = "ID do segmento", example = "1") @PathVariable Long id) {
         return super.buscarPorId(id);
@@ -47,20 +47,25 @@ public class SegmentoController extends BaseCrudController<Segmento> {
     @Override
     @PostMapping
     @Operation(summary = "Criar segmento", description = "Cria um segmento; o ID do corpo é ignorado.")
-    @ApiResponse(responseCode = "201", description = "Segmento criado com sucesso")
+    @ApiResponses({@ApiResponse(responseCode = "201", description = "Segmento criado com sucesso"),
+                   @ApiResponse(responseCode = "404", description = "Dados da categoria inválidos")})
     public ResponseEntity<Segmento> criar(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dados do segmento", required = true)
-            @RequestBody Segmento entity) { return super.criar(entity); }
+            @RequestBody Segmento entity) { 
+        return super.criar(entity); 
+    }
 
     @Override
     @PutMapping("/{id}")
     @Operation(summary = "Atualizar segmento", description = "Atualiza um segmento ativo.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Segmento atualizado com sucesso"),
-            @ApiResponse(responseCode = "404", description = "Segmento não encontrado ou inativo")})
+                   @ApiResponse(responseCode = "404", description = "Segmento não encontrado ou inativo")})
     public ResponseEntity<Segmento> atualizar(
             @Parameter(description = "ID do segmento", example = "1") @PathVariable Long id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dados atualizados do segmento", required = true)
-            @RequestBody Segmento entity) { return super.atualizar(id, entity); }
+            @RequestBody Segmento entity) { 
+        return super.atualizar(id, entity); 
+    }
 
     @Override
     @DeleteMapping("/{id}")
