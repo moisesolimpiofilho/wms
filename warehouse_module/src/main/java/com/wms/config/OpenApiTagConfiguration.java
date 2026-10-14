@@ -1,5 +1,12 @@
 package com.wms.config;
 
+// IMPORTS OBRIGATÓRIOS PARA O OPENAPI
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
+
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.aop.support.AopUtils;
@@ -10,10 +17,34 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @Configuration
 public class OpenApiTagConfiguration {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        final String securitySchemeName = "bearerAuth";
+        
+        return new OpenAPI()
+            // Define explicitamente o Gateway como servidor padrão das requisições do Swagger
+            .servers(List.of(
+                new Server().url("http://localhost:8082").description("API Gateway (Porta Pública)")
+            ))
+            .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
+            .components(
+                new Components()
+                    .addSecuritySchemes(securitySchemeName,
+                        new SecurityScheme()
+                            .name(securitySchemeName)
+                            .type(SecurityScheme.Type.HTTP)
+                            .scheme("bearer")
+                            .bearerFormat("JWT")
+                    )
+            );
+    }
+
     @Bean
     public OpenApiCustomizer entityControllerTags(ObjectProvider<ApplicationContext> applicationContextProvider) {
         return openApi -> {

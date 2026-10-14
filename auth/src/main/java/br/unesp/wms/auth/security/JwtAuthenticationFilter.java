@@ -1,7 +1,9 @@
 package br.unesp.wms.auth.security;
 
 import java.io.IOException;
+import java.util.Collections;
 
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -18,6 +20,17 @@ import lombok.RequiredArgsConstructor;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        // Ignora a verificação de token nas rotas públicas e no Swagger repassado
+        return path.startsWith("/swagger-ui") || 
+               path.startsWith("/v3/api-docs") || 
+               path.equals("/swagger-ui.html") ||
+               path.startsWith("/auth/login") ||
+               path.startsWith("/auth/register");
+    }
 
     @Override 
     protected void doFilterInternal(
@@ -45,7 +58,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
-                    username, null, null);
+                    username, null, Collections.emptyList());
 
             SecurityContextHolder
                     .getContext()
