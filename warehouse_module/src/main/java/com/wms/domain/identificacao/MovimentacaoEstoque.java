@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @Table(name = "movimentacao_estoque")
 @EqualsAndHashCode(callSuper = true)
 public class MovimentacaoEstoque extends BaseEntity {
+    @Column private Long orderId;
     @Column(nullable = false) private Long productId;
     @Column private Long batchId;
     @Column private Long originLocationId;

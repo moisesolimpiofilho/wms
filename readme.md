@@ -153,3 +153,40 @@ docker compose start
 docker compose down -v
 ```
 > ⚠️ **Atenção:** O comando `docker compose down -v` apaga permanentemente todos os dados armazenados nos volumes do Postgres, MongoDB e Redis localmente.
+
+## Integração de ordens de estoque via Redis Pub/Sub
+
+O módulo `warehouse_module` assina o tópico Redis `warehouse:orders` (configurável por
+`warehouse.redis.orders.topic`). Para simular uma aplicação externa, envie uma ordem para
+`POST http://localhost:8083/api/integracao/ordens-estoque`. O endpoint publica a mensagem no
+tópico e responde `202 Accepted` quando há consumidores inscritos; o processamento é assíncrono.
+
+Exemplo de entrada:
+
+```bash
+curl -X POST http://localhost:8083/api/integracao/ordens-estoque \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "code": "APP-EXT-ENT-001",
+    "movementType": "ENTRADA",
+    "productId": 1,
+    "batchId": 1,
+    "locationId": 1,
+    "quantity": 10.0000,
+    "weight": 2.5000,
+    "reasonId": 1,
+    "userId": 1,
+    "userName": "integracao-externa",
+    "observation": "Entrada solicitada pelo sistema externo"
+  }'
+```
+
+Para simular uma saída, use `movementType: "SAIDA"` e os mesmos campos, com o local de
+origem em `locationId`. A saída só é executada se houver saldo disponível do produto, lote
+e unidade logística informados. Lote e unidade logística são opcionais. O `code` deve ser
+único por ordem: publicar novamente uma ordem já processada não repete a movimentação.
+
+Ao consumir uma mensagem válida, o WMS atualiza o saldo, registra a ordem concluída, seu
+item e a movimentação correspondente. Falhas de validação ou saldo insuficiente são
+registradas nos logs do serviço. Redis Pub/Sub oferece entrega efêmera: mensagens publicadas
+sem consumidores ativos não ficam armazenadas para processamento posterior.
