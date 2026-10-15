@@ -3,6 +3,7 @@ package com.wms.domain.operacoes;
 import com.wms.domain.base.BaseEntity;
 import com.wms.domain.enums.MovementType;
 import com.wms.domain.enums.StatusOperacao;
+import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -25,8 +26,9 @@ public class OrdemEstoque extends BaseEntity {
     @Column(nullable = false)
     private StatusOperacao status;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Long reasonId;
+    private MotivoMovimentacao reason;
 
     @Column
     private Long originWarehouseId;

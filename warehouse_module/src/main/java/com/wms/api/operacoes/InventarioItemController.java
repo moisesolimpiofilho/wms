@@ -2,6 +2,8 @@ package com.wms.api.operacoes;
 
 import com.wms.api.base.BaseCrudController;
 import com.wms.domain.operacoes.itens.InventarioItem;
+import com.wms.integration.estoque.StockAdjustmentRequest;
+import com.wms.service.estoque.StockAdjustmentService;
 import jakarta.persistence.EntityManager;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,8 +19,28 @@ import java.util.List;
 @RequestMapping("/api/inventario-itens")
 @Tag(name = "Itens de inventário", description = "Itens e contagens vinculados a inventários")
 public class InventarioItemController extends BaseCrudController<InventarioItem> {
-    public InventarioItemController(EntityManager entityManager) {
+    private final StockAdjustmentService stockAdjustmentService;
+
+    public InventarioItemController(EntityManager entityManager, StockAdjustmentService stockAdjustmentService) {
         super(entityManager, InventarioItem.class);
+        this.stockAdjustmentService = stockAdjustmentService;
+    }
+
+    @PostMapping("/{id}/ajustes")
+    @Operation(summary = "Aplicar ajuste de inventário",
+            description = "Compara a contagem com o saldo atual e registra a divergência no estoque.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ajuste aplicado ou estoque já conciliado"),
+            @ApiResponse(responseCode = "400", description = "Dados do ajuste inválidos"),
+            @ApiResponse(responseCode = "404", description = "Item ou inventário não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Inventário encerrado ou saldo reservado incompatível")
+    })
+    public ResponseEntity<StockAdjustmentService.AdjustmentResult> ajustar(
+            @Parameter(description = "ID do item de inventário", example = "1") @PathVariable Long id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Contagem física e dados do usuário responsável", required = true)
+            @RequestBody StockAdjustmentRequest request) {
+        return ResponseEntity.ok(stockAdjustmentService.adjust(id, request));
     }
 
     @Override @GetMapping

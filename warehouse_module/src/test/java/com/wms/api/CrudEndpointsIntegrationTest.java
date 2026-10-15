@@ -3,7 +3,7 @@ package com.wms.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.Main;
-import com.wms.domain.auditoria.TransactionLog;
+import com.wms.domain.auditoria.AuditLog;
 import com.wms.domain.base.BaseEntity;
 import com.wms.api.base.EntityRequestValidator;
 import com.wms.domain.cadastros.Categoria;
@@ -20,7 +20,6 @@ import com.wms.domain.estoque.LocalEstoque;
 import com.wms.domain.estoque.TipoLocal;
 import com.wms.domain.estoque.ZonaArmazenagem;
 import com.wms.domain.identificacao.Lote;
-import com.wms.domain.identificacao.MovimentacaoEstoque;
 import com.wms.domain.identificacao.Selo;
 import com.wms.domain.identificacao.UnidadeLogistica;
 import com.wms.domain.operacoes.Expedicao;
@@ -30,7 +29,6 @@ import com.wms.domain.operacoes.OrdemMovimentacao;
 import com.wms.domain.operacoes.Pedido;
 import com.wms.domain.operacoes.Recebimento;
 import com.wms.domain.operacoes.Separacao;
-import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 import com.wms.domain.operacoes.complementos.OrdemEstoqueItem;
 import com.wms.domain.operacoes.itens.InventarioItem;
 import com.wms.domain.operacoes.itens.PedidoItem;
@@ -67,6 +65,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,6 +106,24 @@ class CrudEndpointsIntegrationTest {
     void setUpMockMvc() {
         mockMvc = MockMvcBuilders.webAppContextSetup(applicationContext).build();
         seededReferenceIds.clear();
+    }
+
+    @Test
+    void stockMovementHistoryCannotBeCreatedUpdatedOrDeletedThroughItsApi() throws Exception {
+        mockMvc.perform(get("/api/movimentacoes-estoque"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/movimentacoes-estoque/1"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/movimentacoes-estoque")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(put("/api/movimentacoes-estoque/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(delete("/api/movimentacoes-estoque/1"))
+                .andExpect(status().isMethodNotAllowed());
     }
 
     @Test
@@ -290,6 +307,57 @@ class CrudEndpointsIntegrationTest {
         assertFalse(deletedEntity.getActive(), "Soft delete must set active=false");
     }
 
+    @Test
+    @Transactional
+    void automaticallyAuditsCrudChangesAndExposesAuditAsReadOnly() throws Exception {
+        Map<String, Object> payload = validPayload(Cliente.class);
+        payload.put("code", "CLIENTE-AUDITORIA");
+        String createdJson = mockMvc.perform(post("/api/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long clientId = objectMapper.readTree(createdJson).get("id").asLong();
+
+        mockMvc.perform(get("/api/logs-transacao"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].entityName").value(Cliente.class.getName()))
+                .andExpect(jsonPath("$[0].entityId").value(clientId))
+                .andExpect(jsonPath("$[0].operation").value("CREATE"))
+                .andExpect(jsonPath("$[0].userName").value(payload.get("userNameCreator")));
+
+        payload.put("userNameLastChange", "auditoria-update-test");
+        mockMvc.perform(put("/api/clientes/" + clientId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/clientes/" + clientId))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/logs-transacao"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].operation").value("DELETE"))
+                .andExpect(jsonPath("$[0].previousState").isNotEmpty())
+                .andExpect(jsonPath("$[0].currentState").isNotEmpty())
+                .andExpect(jsonPath("$[1].operation").value("UPDATE"))
+                .andExpect(jsonPath("$[1].previousState").isNotEmpty())
+                .andExpect(jsonPath("$[1].currentState").isNotEmpty());
+
+        mockMvc.perform(post("/api/logs-transacao")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AuditLog())))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(put("/api/logs-transacao/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(delete("/api/logs-transacao/1"))
+                .andExpect(status().isMethodNotAllowed());
+    }
+
     @ParameterizedTest(name = "{0} rejects blank required String fields on POST and PUT")
     @MethodSource("entityEndpoints")
     @Transactional
@@ -339,6 +407,74 @@ class CrudEndpointsIntegrationTest {
         }
     }
 
+    @Test
+    @Transactional
+    void receivingItemsCreatesAndAccumulatesPersistedStock() throws Exception {
+        Map<String, Object> receiptPayload = validPayload(Recebimento.class);
+        String createdReceipt = mockMvc.perform(post("/api/recebimentos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(receiptPayload)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long receiptId = objectMapper.readTree(createdReceipt).get("id").asLong();
+
+        Map<String, Object> payload = validPayload(RecebimentoItem.class);
+        payload.put("receiptId", receiptId);
+
+        String firstReceiptItem = mockMvc.perform(post("/api/recebimento-itens")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.locationId").value(payload.get("locationId")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long receiptItemId = objectMapper.readTree(firstReceiptItem).get("id").asLong();
+
+        Map<String, Object> secondPayload = new LinkedHashMap<>(payload);
+        secondPayload.put("quantity", new BigDecimal("2.0000"));
+        mockMvc.perform(post("/api/recebimento-itens")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondPayload)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/recebimentos/{id}", receiptId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(receiptId));
+        mockMvc.perform(get("/api/recebimento-itens/{id}", receiptItemId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(receiptItemId))
+                .andExpect(jsonPath("$.receiptId").value(receiptId));
+        mockMvc.perform(get("/api/estoques"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].productId").value(payload.get("productId")))
+                .andExpect(jsonPath("$[0].locationId").value(payload.get("locationId")))
+                .andExpect(jsonPath("$[0].quantity").value(3.0))
+                .andExpect(jsonPath("$[0].quantityAvailable").value(3.0));
+        mockMvc.perform(get("/api/movimentacoes-estoque"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[*].movementType").value(containsInAnyOrder("ENTRADA", "ENTRADA")))
+                .andExpect(jsonPath("$[*].productId").value(containsInAnyOrder(
+                        ((Number) payload.get("productId")).intValue(), ((Number) payload.get("productId")).intValue())))
+                .andExpect(jsonPath("$[*].destinationLocationId").value(containsInAnyOrder(
+                        ((Number) payload.get("locationId")).intValue(), ((Number) payload.get("locationId")).intValue())));
+        mockMvc.perform(get("/api/ordens-estoque"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[*].orderType").value(containsInAnyOrder("ENTRADA", "ENTRADA")))
+                .andExpect(jsonPath("$[*].status").value(containsInAnyOrder("CONCLUIDO", "CONCLUIDO")));
+        mockMvc.perform(get("/api/ordens-estoque-itens"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[*].productId").value(containsInAnyOrder(
+                        ((Number) payload.get("productId")).intValue(),
+                        ((Number) payload.get("productId")).intValue())));
+    }
+
     @ParameterizedTest(name = "{0} returns 404 for missing records")
     @MethodSource("entityEndpoints")
     void returnsNotFoundForMissingRecords(Endpoint endpoint) throws Exception {
@@ -381,7 +517,46 @@ class CrudEndpointsIntegrationTest {
             assertOperationHasEntityDocumentation(itemPath.path("put"), endpoint.path() + "/{id} PUT", endpoint.path());
             assertOperationHasEntityDocumentation(itemPath.path("delete"), endpoint.path() + "/{id} DELETE", endpoint.path());
         }
-        assertEquals(31, entityEndpoints().count());
+        assertEquals(28, entityEndpoints().count());
+        JsonNode auditCollectionPath = paths.path("/api/logs-transacao");
+        JsonNode auditItemPath = paths.path("/api/logs-transacao/{id}");
+        assertTrue(auditCollectionPath.has("get"));
+        assertTrue(auditItemPath.has("get"));
+        assertFalse(auditCollectionPath.has("post"));
+        assertFalse(auditItemPath.has("put"));
+        assertFalse(auditItemPath.has("delete"));
+    }
+
+    @Test
+    void documentsStockMovementHistoryAsReadOnly() throws Exception {
+        String document = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        JsonNode paths = objectMapper.readTree(document).path("paths");
+        JsonNode collectionPath = paths.path("/api/movimentacoes-estoque");
+        JsonNode itemPath = paths.path("/api/movimentacoes-estoque/{id}");
+
+        assertTrue(collectionPath.has("get"));
+        assertFalse(collectionPath.has("post"));
+        assertTrue(itemPath.has("get"));
+        assertFalse(itemPath.has("put"));
+        assertFalse(itemPath.has("delete"));
+    }
+
+    @Test
+    void documentsMovementReasonsAsAReadOnlyCatalog() throws Exception {
+        String document = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        JsonNode catalogPath = objectMapper.readTree(document).path("paths").path("/api/motivos-movimentacao");
+
+        assertTrue(catalogPath.has("get"));
+        assertFalse(catalogPath.has("post"));
+        assertFalse(objectMapper.readTree(document).path("paths").has("/api/motivos-movimentacao/{id}"));
     }
 
     private void assertOperationHasEntityDocumentation(JsonNode operation, String endpoint, String resourcePath) {
@@ -438,6 +613,9 @@ class CrudEndpointsIntegrationTest {
                 boolean required = column != null && !column.nullable();
                 payload.put(field.getName(), required ? seedEntity(referenceType) : null);
             }
+        }
+        if (entityType == RecebimentoItem.class) {
+            payload.put("locationId", seedEntity(LocalEstoque.class));
         }
         payload.put("userNameCreator", "crud-integration-test");
         payload.put("userNameLastChange", "crud-integration-test");
@@ -551,7 +729,6 @@ class CrudEndpointsIntegrationTest {
                 new Endpoint(TipoLocal.class, "/api/tipos-local"),
                 new Endpoint(ZonaArmazenagem.class, "/api/zonas-armazenagem"),
                 new Endpoint(Lote.class, "/api/lotes"),
-                new Endpoint(MovimentacaoEstoque.class, "/api/movimentacoes-estoque"),
                 new Endpoint(Selo.class, "/api/selos"),
                 new Endpoint(UnidadeLogistica.class, "/api/unidades-logisticas"),
                 new Endpoint(Expedicao.class, "/api/expedicoes"),
@@ -561,13 +738,11 @@ class CrudEndpointsIntegrationTest {
                 new Endpoint(Pedido.class, "/api/pedidos"),
                 new Endpoint(Recebimento.class, "/api/recebimentos"),
                 new Endpoint(Separacao.class, "/api/separacoes"),
-                new Endpoint(MotivoMovimentacao.class, "/api/motivos-movimentacao"),
                 new Endpoint(OrdemEstoqueItem.class, "/api/ordens-estoque-itens"),
                 new Endpoint(InventarioItem.class, "/api/inventario-itens"),
                 new Endpoint(PedidoItem.class, "/api/pedido-itens"),
                 new Endpoint(RecebimentoItem.class, "/api/recebimento-itens"),
-                new Endpoint(SeparacaoItem.class, "/api/separacao-itens"),
-                new Endpoint(TransactionLog.class, "/api/logs-transacao"));
+                new Endpoint(SeparacaoItem.class, "/api/separacao-itens"));
     }
 
     private record Endpoint(Class<? extends BaseEntity> entityType, String path) {

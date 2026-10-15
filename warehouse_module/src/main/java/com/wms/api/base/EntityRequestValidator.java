@@ -21,7 +21,6 @@ import com.wms.domain.operacoes.OrdemEstoque;
 import com.wms.domain.operacoes.Pedido;
 import com.wms.domain.operacoes.Recebimento;
 import com.wms.domain.operacoes.Separacao;
-import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 import com.wms.domain.operacoes.complementos.OrdemEstoqueItem;
 import com.wms.domain.operacoes.itens.PedidoItem;
 import jakarta.persistence.Column;
@@ -52,7 +51,6 @@ public class EntityRequestValidator {
             Map.entry("packagingId", Embalagem.class),
             Map.entry("customerId", Cliente.class),
             Map.entry("supplierId", Fornecedor.class),
-            Map.entry("reasonId", MotivoMovimentacao.class),
             Map.entry("inventoryId", Inventario.class),
             Map.entry("receiptId", Recebimento.class),
             Map.entry("separationId", Separacao.class),

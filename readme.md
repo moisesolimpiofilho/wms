@@ -113,8 +113,6 @@ spring.data.redis.password=senha1234
 
 ## 📦 Redis no `warehouse_module`
 
-O `MotivoMovimentacaoCacheService` consulta o Redis antes de buscar um motivo pelo código no repositório JPA. Em caso de cache miss, o resultado encontrado no banco é gravado no Redis com TTL padrão de 30 minutos. Esse prazo pode ser alterado pela propriedade `warehouse.cache.motivo-movimentacao.ttl` usando um valor `Duration`, por exemplo `PT15M`.
-
 O `RedisTransactionStore` grava cada `TransactionLog` em `warehouse:transactions:<transactionId>`, sem expiração, e permite recuperá-lo pelo identificador. O identificador é tratado como único no Redis; tentar gravar uma transação com chave existente gera erro em vez de substituir o registro.
 
 O `EtiquetaService` oferece operações de entrada, saída parcial e consulta de etiquetas por código. Entradas inicializam o saldo disponível e geram movimentação e transação; saídas rejeitam saldo insuficiente e desativam a etiqueta quando o saldo chega a zero. Os testes unitários mockam os repositórios JPA e o `RedisTransactionStore`.
@@ -124,6 +122,15 @@ Para executar os testes unitários dos serviços:
 ```bash
 mvn -f warehouse_module/pom.xml test
 ```
+
+## Auditoria dos CRUDs
+
+O endpoint `GET /api/logs-transacao` é somente leitura. Os eventos não são criados,
+alterados ou removidos manualmente: cada criação, atualização e exclusão lógica feita
+pelos CRUDs gera automaticamente um registro persistente na tabela `audit_log`, na mesma
+transação da operação original. Cada registro informa a entidade, o ID, a operação, o
+usuário associado e a data/hora, além dos estados anterior e atual em JSON quando
+aplicável. `GET /api/logs-transacao/{id}` consulta um evento individual.
 
 ---
 
@@ -174,19 +181,85 @@ curl -X POST http://localhost:8083/api/integracao/ordens-estoque \
     "locationId": 1,
     "quantity": 10.0000,
     "weight": 2.5000,
-    "reasonId": 1,
+    "reason": "RECEBIMENTO_AQUISICAO",
     "userId": 1,
     "userName": "integracao-externa",
     "observation": "Entrada solicitada pelo sistema externo"
   }'
 ```
 
+Os motivos são fixos e podem ser consultados em `GET
+http://localhost:8083/api/motivos-movimentacao`. O endpoint retorna os códigos aceitos no campo
+`reason` e suas descrições. Os valores disponíveis são `RECEBIMENTO_PRODUCAO`,
+`RECEBIMENTO_AQUISICAO`, `EXPEDICAO_VENDA`, `EXPEDICAO_INVENTARIO` e
+`AJUSTE_INVENTARIO`.
+O contrato agora usa `reason` com um desses códigos, em vez do antigo `reasonId`.
+
+## Ajuste de estoque por inventário
+
+Depois de contar um item de inventário, aplique a contagem com
+`POST /api/inventario-itens/{id}/ajustes`. Produto, lote e local do corpo devem corresponder
+ao item. O processamento bloqueia o saldo atual, preserva quantidades reservadas, atualiza o
+estoque e o cache Redis e, quando há divergência, registra movimentação do tipo `AJUSTE`,
+`HistoricoAjuste` e `TransactionLog`.
+
+```json
+{
+  "productId": 1,
+  "locationId": 4,
+  "batchId": 3,
+  "countedQuantity": 8.0000,
+  "countedWeight": 12.5000,
+  "reason": "AJUSTE_INVENTARIO",
+  "userId": 5,
+  "userName": "operador"
+}
+```
+
+`countedWeight` é opcional. Se omitido, o peso existente não é alterado. Quando não há
+divergência, a API retorna `adjusted: false` e não cria movimentação ou histórico; repetir uma
+contagem já aplicada também não duplica esses registros. Inventários concluídos ou cancelados
+não aceitam ajustes, e a contagem não pode ficar abaixo do saldo reservado.
+
+## Recebimento de itens e entrada de estoque
+
+Ao cadastrar um item em `POST /api/recebimento-itens`, informe `locationId`, `userId` e um
+motivo de recebimento (`RECEBIMENTO_AQUISICAO` ou `RECEBIMENTO_PRODUCAO`). O item continua
+sendo registrado e, na mesma transação, o WMS executa o fluxo de entrada de ordem: cria a
+ordem concluída e seu item, cria a movimentação, atualiza o estoque e o cache e grava o log
+da transação no Redis. A quantidade recebida é adicionada aos saldos total e disponível; o
+peso é atualizado quando informado. O código da ordem é gerado a partir dos IDs do recebimento
+e do item (`RECEBIMENTO-<receiptId>-<itemId>`), evitando exigir um código externo. Exemplo:
+
+```json
+{
+  "receiptId": 1,
+  "productId": 2,
+  "batchId": 3,
+  "locationId": 4,
+  "userId": 5,
+  "reason": "RECEBIMENTO_AQUISICAO",
+  "quantity": 6,
+  "weight": 12.5,
+  "userNameCreator": "operador",
+  "userNameLastChange": "operador"
+}
+```
+
+`userId` e `reason` são dados de entrada do fluxo e não são persistidos como colunas do item
+de recebimento. Para movimentos originados de recebimentos, o log transacional não possui
+`sealId`, pois o item recebido não representa uma etiqueta.
+
 Para simular uma saída, use `movementType: "SAIDA"` e os mesmos campos, com o local de
 origem em `locationId`. A saída só é executada se houver saldo disponível do produto, lote
 e unidade logística informados. Lote e unidade logística são opcionais. O `code` deve ser
 único por ordem: publicar novamente uma ordem já processada não repete a movimentação.
+Para saídas, `vehiclePlate` também pode ser informado. Após validar e atualizar o estoque e o
+cache, o WMS cria a movimentação, a ordem e uma expedição concluída, vinculada ao ID da ordem.
+A expedição recebe o código `EXP-<code>`, a data/hora do processamento e a placa informada
+(ou `null`, se omitida). Entradas não criam expedição.
 
 Ao consumir uma mensagem válida, o WMS atualiza o saldo, registra a ordem concluída, seu
-item e a movimentação correspondente. Falhas de validação ou saldo insuficiente são
-registradas nos logs do serviço. Redis Pub/Sub oferece entrega efêmera: mensagens publicadas
-sem consumidores ativos não ficam armazenadas para processamento posterior.
+item, a movimentação, a expedição (para saídas) e o log da transação no Redis. Falhas de
+validação ou saldo insuficiente são registradas nos logs do serviço. Redis Pub/Sub oferece entrega efêmera: mensagens
+publicadas sem consumidores ativos não ficam armazenadas para processamento posterior.

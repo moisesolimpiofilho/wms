@@ -3,14 +3,19 @@ package com.wms.service.estoque;
 import com.wms.domain.enums.MovementType;
 import com.wms.domain.enums.StatusOperacao;
 import com.wms.domain.estoque.Estoque;
+import com.wms.domain.auditoria.TransactionLog;
 import com.wms.domain.identificacao.MovimentacaoEstoque;
+import com.wms.domain.operacoes.Expedicao;
 import com.wms.domain.operacoes.OrdemEstoque;
+import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 import com.wms.integration.estoque.OrderMovementRequest;
 import com.wms.repository.estoque.EstoqueRepository;
 import com.wms.repository.identificacao.MovimentacaoEstoqueRepository;
+import com.wms.repository.operacoes.ExpedicaoRepository;
 import com.wms.repository.operacoes.OrdemEstoqueItemRepository;
 import com.wms.repository.operacoes.OrdemEstoqueRepository;
 import com.wms.service.cache.EstoqueCacheService;
+import com.wms.service.transaction.RedisTransactionStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,23 +40,29 @@ class OrderMovementProcessorTest {
     @Mock
     private MovimentacaoEstoqueRepository movementRepository;
     @Mock
+    private ExpedicaoRepository expedicaoRepository;
+    @Mock
     private EstoqueRepository stockRepository;
     @Mock
     private EstoqueCacheService estoqueCacheService;
+    @Mock
+    private RedisTransactionStore transactionStore;
 
     private OrderMovementProcessor processor;
 
     @BeforeEach
     void setUp() {
         processor = new OrderMovementProcessor(
-                orderRepository, orderItemRepository, movementRepository, stockRepository, estoqueCacheService);
+                orderRepository, orderItemRepository, movementRepository, expedicaoRepository, stockRepository,
+                estoqueCacheService, transactionStore);
     }
 
     @Test
     void processesInboundOrderAndCreatesAvailableStock() {
         OrderMovementRequest request = new OrderMovementRequest(
                 "IN-001", MovementType.ENTRADA, 11L, 21L, 31L, null, new BigDecimal("10.0000"),
-                new BigDecimal("2.5000"), 51L, 61L, "integracao-externa", "Teste");
+                new BigDecimal("2.5000"), MotivoMovimentacao.RECEBIMENTO_AQUISICAO, 61L,
+                "integracao-externa", "Teste");
         when(orderRepository.findByCode(request.code())).thenReturn(Optional.empty());
         when(stockRepository.lockActiveByProductAndLocation(11L, 21L, 31L, null)).thenReturn(List.of());
         when(orderRepository.save(any(OrdemEstoque.class))).thenAnswer(invocation -> {
@@ -59,11 +70,17 @@ class OrderMovementProcessorTest {
             order.setId(41L);
             return order;
         });
+        when(movementRepository.save(any(MovimentacaoEstoque.class))).thenAnswer(invocation -> {
+            MovimentacaoEstoque movement = invocation.getArgument(0);
+            movement.setId(51L);
+            return movement;
+        });
 
         OrdemEstoque order = processor.process(request);
 
         assertEquals(StatusOperacao.CONCLUIDO, order.getStatus());
         assertEquals(MovementType.ENTRADA, order.getOrderType());
+        assertEquals(MotivoMovimentacao.RECEBIMENTO_AQUISICAO, order.getReason());
         assertEquals(31L, order.getDestinationLocationId());
 
         ArgumentCaptor<Estoque> stockCaptor = ArgumentCaptor.forClass(Estoque.class);
@@ -78,6 +95,18 @@ class OrderMovementProcessorTest {
         assertEquals(41L, movementCaptor.getValue().getOrderId());
         assertEquals(31L, movementCaptor.getValue().getDestinationLocationId());
         assertNull(movementCaptor.getValue().getOriginLocationId());
+        verifyNoInteractions(expedicaoRepository);
+
+        ArgumentCaptor<TransactionLog> transactionCaptor = ArgumentCaptor.forClass(TransactionLog.class);
+        verify(transactionStore).save(transactionCaptor.capture());
+        TransactionLog transaction = transactionCaptor.getValue();
+        assertEquals(51L, transaction.getMovementId());
+        assertEquals(61L, transaction.getUserId());
+        assertEquals(11L, transaction.getProductId());
+        assertEquals(21L, transaction.getBatchId());
+        assertEquals(MotivoMovimentacao.RECEBIMENTO_AQUISICAO.getDescricao(), transaction.getReason());
+        assertEquals(new BigDecimal("10.0000"), transaction.getQuantity());
+        assertNull(transaction.getSealId());
     }
 
     @Test
@@ -93,6 +122,11 @@ class OrderMovementProcessorTest {
             order.setId(42L);
             return order;
         });
+        when(movementRepository.save(any(MovimentacaoEstoque.class))).thenAnswer(invocation -> {
+            MovimentacaoEstoque movement = invocation.getArgument(0);
+            movement.setId(52L);
+            return movement;
+        });
 
         OrdemEstoque order = processor.process(request);
 
@@ -104,6 +138,15 @@ class OrderMovementProcessorTest {
                 movement.getMovementType() == MovementType.SAIDA
                         && movement.getOriginLocationId().equals(31L)
                         && movement.getDestinationLocationId() == null));
+        ArgumentCaptor<Expedicao> expedicaoCaptor = ArgumentCaptor.forClass(Expedicao.class);
+        verify(expedicaoRepository).save(expedicaoCaptor.capture());
+        Expedicao expedicao = expedicaoCaptor.getValue();
+        assertEquals("EXP-OUT-001", expedicao.getCode());
+        assertEquals(order.getId(), expedicao.getOrderId());
+        assertEquals(StatusOperacao.CONCLUIDO, expedicao.getStatus());
+        assertNotNull(expedicao.getShippingDate());
+        assertEquals("ABC1D23", expedicao.getVehiclePlate());
+        assertEquals("integracao-externa", expedicao.getUserNameCreator());
     }
 
     @Test
@@ -116,7 +159,7 @@ class OrderMovementProcessorTest {
         assertThrows(IllegalArgumentException.class, () -> processor.process(request));
 
         verify(orderRepository, never()).save(any(OrdemEstoque.class));
-        verifyNoInteractions(orderItemRepository, movementRepository);
+        verifyNoInteractions(orderItemRepository, movementRepository, expedicaoRepository);
         verify(stockRepository, never()).save(any(Estoque.class));
     }
 
@@ -129,14 +172,18 @@ class OrderMovementProcessorTest {
 
         assertSame(existingOrder, processor.process(request));
 
-        verifyNoInteractions(stockRepository, orderItemRepository, movementRepository);
+        verifyNoInteractions(stockRepository, orderItemRepository, movementRepository, expedicaoRepository);
         verify(orderRepository, never()).save(any(OrdemEstoque.class));
     }
 
     private OrderMovementRequest request(MovementType type, String code, String quantity) {
         return new OrderMovementRequest(
                 code, type, 11L, 21L, 31L, null, new BigDecimal(quantity), null,
-                51L, 61L, "integracao-externa", "Teste");
+                type == MovementType.ENTRADA
+                        ? MotivoMovimentacao.RECEBIMENTO_PRODUCAO
+                        : MotivoMovimentacao.EXPEDICAO_VENDA,
+                61L, "integracao-externa", "Teste",
+                type == MovementType.SAIDA ? "ABC1D23" : null);
     }
 
     private Estoque stock(String quantity, String available) {

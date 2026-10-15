@@ -1,6 +1,7 @@
 package com.wms.integration.estoque;
 
 import com.wms.domain.enums.MovementType;
+import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 
 import java.math.BigDecimal;
 
@@ -13,10 +14,28 @@ public record OrderMovementRequest(
         Long logisticUnitId,
         BigDecimal quantity,
         BigDecimal weight,
-        Long reasonId,
+        MotivoMovimentacao reason,
         Long userId,
         String userName,
-        String observation) {
+        String observation,
+        String vehiclePlate) {
+
+    public OrderMovementRequest(
+            String code,
+            MovementType movementType,
+            Long productId,
+            Long batchId,
+            Long locationId,
+            Long logisticUnitId,
+            BigDecimal quantity,
+            BigDecimal weight,
+            MotivoMovimentacao reason,
+            Long userId,
+            String userName,
+            String observation) {
+        this(code, movementType, productId, batchId, locationId, logisticUnitId, quantity, weight,
+                reason, userId, userName, observation, null);
+    }
 
     public void validate() {
         if (code == null || code.isBlank()) {
@@ -37,7 +56,7 @@ public record OrderMovementRequest(
         if (weight != null && weight.signum() < 0) {
             throw new IllegalArgumentException("O peso não pode ser negativo");
         }
-        if (reasonId == null || reasonId <= 0 || userId == null || userId <= 0) {
+        if (reason == null || userId == null || userId <= 0) {
             throw new IllegalArgumentException("Motivo e usuário devem ser informados");
         }
         if (userName == null || userName.isBlank()) {

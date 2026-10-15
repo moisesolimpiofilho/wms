@@ -1,16 +1,19 @@
 package com.wms.domain.operacoes.ajustes;
 
-import com.wms.domain.base.BaseEntity;
-import jakarta.persistence.*;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+public enum MotivoMovimentacao {
+    RECEBIMENTO_PRODUCAO("RECEBIMENTO - Produção"),
+    RECEBIMENTO_AQUISICAO("RECEBIMENTO - Aquisição"),
+    EXPEDICAO_VENDA("EXPEDIÇÃO - Venda"),
+    EXPEDICAO_INVENTARIO("EXPEDIÇÃO - Inventario"),
+    AJUSTE_INVENTARIO("AJUSTE - Inventário");
 
-@Data
-@Entity
-@Table(name = "motivo_movimentacao")
-@EqualsAndHashCode(callSuper = true)
-public class MotivoMovimentacao extends BaseEntity {
-    @Column(nullable = false, unique = true) private String code;
-    @Column(nullable = false) private String description;
+    private final String descricao;
+
+    MotivoMovimentacao(String descricao) {
+        this.descricao = descricao;
+    }
+
+    public String getDescricao() {
+        return descricao;
+    }
 }
-

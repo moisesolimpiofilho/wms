@@ -1,18 +1,22 @@
 package com.wms.service.estoque;
 
 import com.wms.domain.base.BaseEntity;
+import com.wms.domain.auditoria.TransactionLog;
 import com.wms.domain.enums.MovementType;
 import com.wms.domain.enums.StatusOperacao;
 import com.wms.domain.estoque.Estoque;
 import com.wms.domain.identificacao.MovimentacaoEstoque;
+import com.wms.domain.operacoes.Expedicao;
 import com.wms.domain.operacoes.OrdemEstoque;
 import com.wms.domain.operacoes.complementos.OrdemEstoqueItem;
 import com.wms.integration.estoque.OrderMovementRequest;
 import com.wms.repository.estoque.EstoqueRepository;
 import com.wms.repository.identificacao.MovimentacaoEstoqueRepository;
+import com.wms.repository.operacoes.ExpedicaoRepository;
 import com.wms.repository.operacoes.OrdemEstoqueItemRepository;
 import com.wms.repository.operacoes.OrdemEstoqueRepository;
 import com.wms.service.cache.EstoqueCacheService;
+import com.wms.service.transaction.RedisTransactionStore;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,26 +24,33 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class OrderMovementProcessor {
     private final OrdemEstoqueRepository orderRepository;
     private final OrdemEstoqueItemRepository orderItemRepository;
     private final MovimentacaoEstoqueRepository movementRepository;
+    private final ExpedicaoRepository expedicaoRepository;
     private final EstoqueRepository stockRepository;
     private final EstoqueCacheService estoqueCacheService;
+    private final RedisTransactionStore transactionStore;
 
     public OrderMovementProcessor(
             OrdemEstoqueRepository orderRepository,
             OrdemEstoqueItemRepository orderItemRepository,
             MovimentacaoEstoqueRepository movementRepository,
+            ExpedicaoRepository expedicaoRepository,
             EstoqueRepository stockRepository,
-            EstoqueCacheService estoqueCacheService) {
+            EstoqueCacheService estoqueCacheService,
+            RedisTransactionStore transactionStore) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.movementRepository = movementRepository;
+        this.expedicaoRepository = expedicaoRepository;
         this.stockRepository = stockRepository;
         this.estoqueCacheService = estoqueCacheService;
+        this.transactionStore = transactionStore;
     }
 
     @Transactional
@@ -94,9 +105,34 @@ public class OrderMovementProcessor {
             movement.setOriginLocationId(request.locationId());
         }
         setCreationAuditFields(movement, request.userName(), now);
-        movementRepository.save(movement);
+        MovimentacaoEstoque savedMovement = movementRepository.save(movement);
+        if (request.movementType() == MovementType.SAIDA) {
+            createExpedicao(request, order, now);
+        }
+        saveTransaction(request, savedMovement, now);
 
         return order;
+    }
+
+    private void saveTransaction(
+            OrderMovementRequest request,
+            MovimentacaoEstoque movement,
+            LocalDateTime timestamp) {
+        TransactionLog transaction = new TransactionLog();
+        transaction.setTransactionId(UUID.randomUUID().toString());
+        transaction.setMovementId(movement.getId());
+        transaction.setUserId(request.userId());
+        transaction.setOriginLocationId(movement.getOriginLocationId());
+        transaction.setDestinationLocationId(movement.getDestinationLocationId());
+        transaction.setTransactionDate(timestamp);
+        transaction.setSealId(null);
+        transaction.setProductId(request.productId());
+        transaction.setBatchId(request.batchId());
+        transaction.setReason(request.reason().getDescricao());
+        transaction.setMovementType(request.movementType());
+        transaction.setQuantity(request.quantity());
+        transaction.setWeight(request.weight());
+        transactionStore.save(transaction);
     }
 
     private OrdemEstoque createOrder(OrderMovementRequest request, LocalDateTime now) {
@@ -104,7 +140,7 @@ public class OrderMovementProcessor {
         order.setCode(request.code());
         order.setOrderType(request.movementType());
         order.setStatus(StatusOperacao.CONCLUIDO);
-        order.setReasonId(request.reasonId());
+        order.setReason(request.reason());
         if (request.movementType() == MovementType.ENTRADA) {
             order.setDestinationLocationId(request.locationId());
         } else {
@@ -117,6 +153,17 @@ public class OrderMovementProcessor {
         order.setObservation(request.observation());
         setCreationAuditFields(order, request.userName(), now);
         return order;
+    }
+
+    private void createExpedicao(OrderMovementRequest request, OrdemEstoque order, LocalDateTime now) {
+        Expedicao expedicao = new Expedicao();
+        expedicao.setCode("EXP-" + order.getCode());
+        expedicao.setOrderId(order.getId());
+        expedicao.setStatus(StatusOperacao.CONCLUIDO);
+        expedicao.setShippingDate(now);
+        expedicao.setVehiclePlate(request.vehiclePlate());
+        setCreationAuditFields(expedicao, request.userName(), now);
+        expedicaoRepository.save(expedicao);
     }
 
     private void registerEntry(OrderMovementRequest request, List<Estoque> stockEntries, LocalDateTime now) {

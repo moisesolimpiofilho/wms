@@ -1,8 +1,10 @@
 package com.wms.api.base;
 
 import com.wms.domain.base.BaseEntity;
+import com.wms.service.auditoria.CrudAuditService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.metamodel.EntityType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,11 +21,17 @@ public abstract class BaseCrudController<T extends BaseEntity> {
     private final EntityManager entityManager;
     private final Class<T> entityType;
     private final EntityRequestValidator requestValidator;
+    private CrudAuditService auditService;
 
     protected BaseCrudController(EntityManager entityManager, Class<T> entityType) {
         this.entityManager = entityManager;
         this.entityType = entityType;
         this.requestValidator = new EntityRequestValidator(entityManager);
+    }
+
+    @Autowired
+    protected void setAuditService(CrudAuditService auditService) {
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -53,6 +61,8 @@ public abstract class BaseCrudController<T extends BaseEntity> {
             entity.setActive(true);
         }
         entityManager.persist(entity);
+        entityManager.flush();
+        auditService.record("CREATE", entity, null, auditService.snapshot(entity));
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                         .path("/{id}")
                         .buildAndExpand(entity.getId())
@@ -71,12 +81,16 @@ public abstract class BaseCrudController<T extends BaseEntity> {
         if (entity == null) {
             return ResponseEntity.badRequest().build();
         }
+        String previousState = auditService.snapshot(currentEntity);
         entity.setId(id);
         requestValidator.validate(entity, entityType);
         if (entity.getActive() == null) {
             entity.setActive(currentEntity.getActive());
         }
-        return ResponseEntity.ok(entityManager.merge(entity));
+        T updatedEntity = entityManager.merge(entity);
+        entityManager.flush();
+        auditService.record("UPDATE", updatedEntity, previousState, auditService.snapshot(updatedEntity));
+        return ResponseEntity.ok(updatedEntity);
     }
 
     @DeleteMapping("/{id}")
@@ -87,8 +101,11 @@ public abstract class BaseCrudController<T extends BaseEntity> {
             return ResponseEntity.notFound().build();
         }
 
+        String previousState = auditService.snapshot(entity);
         entity.setActive(false);
         entity.setLastChangeDate(java.time.LocalDateTime.now());
+        entityManager.flush();
+        auditService.record("DELETE", entity, previousState, auditService.snapshot(entity));
         return ResponseEntity.noContent().build();
     }
 

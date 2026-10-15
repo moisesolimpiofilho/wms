@@ -32,7 +32,7 @@ public class TransactionLog extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime transactionDate;
 
-    @Column(nullable = false)
+    @Column
     private Long sealId;
 
     @Column(nullable = false)

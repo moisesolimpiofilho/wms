@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.integration.estoque.OrderMovementPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -41,7 +43,10 @@ class OrdemEstoqueIntegrationControllerTest {
                 .andExpect(jsonPath("$.topic").value("warehouse:orders"))
                 .andExpect(jsonPath("$.subscribers").value(1));
 
-        verify(publisher).publish(anyString());
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(publisher).publish(payloadCaptor.capture());
+        assertEquals("ABC1D23",
+                new ObjectMapper().readTree(payloadCaptor.getValue()).path("vehiclePlate").asText());
     }
 
     @Test
@@ -64,7 +69,7 @@ class OrdemEstoqueIntegrationControllerTest {
                                   "movementType": "SAIDA",
                                   "productId": 1,
                                   "locationId": 2,
-                                  "reasonId": 3,
+                                  "reason": "EXPEDICAO_VENDA",
                                   "userId": 4,
                                   "userName": "external-app"
                                 }
@@ -82,9 +87,10 @@ class OrdemEstoqueIntegrationControllerTest {
                   "productId": 1,
                   "locationId": 2,
                   "quantity": 1,
-                  "reasonId": 3,
+                  "reason": "RECEBIMENTO_AQUISICAO",
                   "userId": 4,
-                  "userName": "external-app"
+                  "userName": "external-app",
+                  "vehiclePlate": "ABC1D23"
                 }
                 """;
     }
