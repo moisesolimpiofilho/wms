@@ -164,6 +164,26 @@ class OrderMovementProcessorTest {
     }
 
     @Test
+    void separationDebitReusesStockRulesWithoutCreatingAnExpedition() {
+        OrderMovementRequest request = new OrderMovementRequest(
+                "SEPARACAO-1-1", MovementType.SAIDA, 11L, 21L, 31L, null,
+                new BigDecimal("3.0000"), null, MotivoMovimentacao.SEPARACAO_PEDIDO,
+                61L, "operador", "Separação");
+        Estoque stock = stock("5.0000", "5.0000");
+        when(stockRepository.lockActiveByProductAndLocation(11L, 21L, 31L, null))
+                .thenReturn(List.of(stock));
+
+        processor.deductStockForSeparation(request);
+
+        assertEquals(new BigDecimal("2.0000"), stock.getQuantity());
+        assertEquals(new BigDecimal("2.0000"), stock.getQuantityAvailable());
+        verify(stockRepository).save(stock);
+        verify(estoqueCacheService).cache(stock);
+        verifyNoInteractions(orderRepository, orderItemRepository, movementRepository, expedicaoRepository,
+                transactionStore);
+    }
+
+    @Test
     void ignoresAlreadyProcessedOrderCode() {
         OrderMovementRequest request = request(MovementType.ENTRADA, "IN-001", "10.0000");
         OrdemEstoque existingOrder = new OrdemEstoque();

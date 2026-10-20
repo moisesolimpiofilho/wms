@@ -5,7 +5,8 @@ public enum MotivoMovimentacao {
     RECEBIMENTO_AQUISICAO("RECEBIMENTO - Aquisição"),
     EXPEDICAO_VENDA("EXPEDIÇÃO - Venda"),
     EXPEDICAO_INVENTARIO("EXPEDIÇÃO - Inventario"),
-    AJUSTE_INVENTARIO("AJUSTE - Inventário");
+    AJUSTE_INVENTARIO("AJUSTE - Inventário"),
+    SEPARACAO_PEDIDO("SEPARAÇÃO - Pedido");
 
     private final String descricao;
 

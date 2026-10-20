@@ -8,6 +8,7 @@ import com.wms.domain.estoque.Estoque;
 import com.wms.domain.identificacao.MovimentacaoEstoque;
 import com.wms.domain.operacoes.Expedicao;
 import com.wms.domain.operacoes.OrdemEstoque;
+import com.wms.domain.operacoes.ajustes.MotivoMovimentacao;
 import com.wms.domain.operacoes.complementos.OrdemEstoqueItem;
 import com.wms.integration.estoque.OrderMovementRequest;
 import com.wms.repository.estoque.EstoqueRepository;
@@ -112,6 +113,22 @@ public class OrderMovementProcessor {
         saveTransaction(request, savedMovement, now);
 
         return order;
+    }
+
+    @Transactional
+    public void deductStockForSeparation(OrderMovementRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("A solicitação da separação não foi informada");
+        }
+        request.validate();
+        if (request.movementType() != MovementType.SAIDA
+                || request.reason() != MotivoMovimentacao.SEPARACAO_PEDIDO) {
+            throw new IllegalArgumentException("A solicitação deve representar uma saída de separação");
+        }
+
+        List<Estoque> stockEntries = stockRepository.lockActiveByProductAndLocation(
+                request.productId(), request.batchId(), request.locationId(), request.logisticUnitId());
+        registerExit(request, stockEntries, LocalDateTime.now());
     }
 
     private void saveTransaction(

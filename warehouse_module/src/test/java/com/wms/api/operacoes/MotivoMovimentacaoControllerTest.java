@@ -22,7 +22,7 @@ class MotivoMovimentacaoControllerTest {
     void listsTheFixedMovementReasonsIncludingInventoryAdjustment() throws Exception {
         mockMvc.perform(get("/api/motivos-movimentacao"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$.length()").value(6))
                 .andExpect(jsonPath("$[0].codigo").value("RECEBIMENTO_PRODUCAO"))
                 .andExpect(jsonPath("$[0].descricao").value("RECEBIMENTO - Produção"))
                 .andExpect(jsonPath("$[1].codigo").value("RECEBIMENTO_AQUISICAO"))
@@ -32,7 +32,9 @@ class MotivoMovimentacaoControllerTest {
                 .andExpect(jsonPath("$[3].codigo").value("EXPEDICAO_INVENTARIO"))
                 .andExpect(jsonPath("$[3].descricao").value("EXPEDIÇÃO - Inventario"))
                 .andExpect(jsonPath("$[4].codigo").value("AJUSTE_INVENTARIO"))
-                .andExpect(jsonPath("$[4].descricao").value("AJUSTE - Inventário"));
+                .andExpect(jsonPath("$[4].descricao").value("AJUSTE - Inventário"))
+                .andExpect(jsonPath("$[5].codigo").value("SEPARACAO_PEDIDO"))
+                .andExpect(jsonPath("$[5].descricao").value("SEPARAÇÃO - Pedido"));
     }
 
     @Test

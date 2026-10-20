@@ -255,6 +255,21 @@ class CrudEndpointsIntegrationTest {
     @MethodSource("entityEndpoints")
     @Transactional
     void completesCrudLifecycleForEveryEntity(Endpoint endpoint) throws Exception {
+        if (endpoint.entityType() == SeparacaoItem.class) {
+            mockMvc.perform(get(endpoint.path()))
+                    .andExpect(status().isOk());
+            mockMvc.perform(post(endpoint.path())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(put(endpoint.path() + "/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isMethodNotAllowed());
+            mockMvc.perform(delete(endpoint.path() + "/1"))
+                    .andExpect(status().isMethodNotAllowed());
+            return;
+        }
         Map<String, Object> payload = validPayload(endpoint.entityType());
 
         mockMvc.perform(get(endpoint.path()))
@@ -279,6 +294,9 @@ class CrudEndpointsIntegrationTest {
                 .andExpect(jsonPath("$.id").value(id));
 
         payload.put("userNameLastChange", "updated-by-integration-test");
+        if (endpoint.entityType() == Separacao.class) {
+            payload.put("status", "CONCLUIDO");
+        }
         mockMvc.perform(put(endpoint.path() + "/" + id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -362,6 +380,9 @@ class CrudEndpointsIntegrationTest {
     @MethodSource("entityEndpoints")
     @Transactional
     void rejectsBlankRequiredStringFields(Endpoint endpoint) throws Exception {
+        if (endpoint.entityType() == SeparacaoItem.class) {
+            return;
+        }
         Map<String, Object> validPayload = validPayload(endpoint.entityType());
         String createdJson = mockMvc.perform(post(endpoint.path())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -487,10 +508,12 @@ class CrudEndpointsIntegrationTest {
         mockMvc.perform(put(endpoint.path() + "/" + missingId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(emptyEntity))
-                .andExpect(status().isNotFound());
+                .andExpect(endpoint.entityType() == SeparacaoItem.class
+                        ? status().isMethodNotAllowed() : status().isNotFound());
 
         mockMvc.perform(delete(endpoint.path() + "/" + missingId))
-                .andExpect(status().isNotFound());
+                .andExpect(endpoint.entityType() == SeparacaoItem.class
+                        ? status().isMethodNotAllowed() : status().isNotFound());
     }
 
     @Test

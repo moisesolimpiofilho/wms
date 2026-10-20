@@ -4,6 +4,7 @@ import com.wms.domain.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
 @Data
@@ -17,4 +18,7 @@ public class SeparacaoItem extends BaseEntity {
     @Column(nullable = false) private Long locationId;
     @Column(nullable = false, precision = 19, scale = 4) private BigDecimal quantity;
     @Column(precision = 19, scale = 4) private BigDecimal weight;
+    @Transient
+    @Schema(description = "ID numérico do operador para auditoria; não é persistido.", requiredMode = Schema.RequiredMode.REQUIRED)
+    private Long userId;
 }
