@@ -132,6 +132,13 @@ transação da operação original. Cada registro informa a entidade, o ID, a op
 usuário associado e a data/hora, além dos estados anterior e atual em JSON quando
 aplicável. `GET /api/logs-transacao/{id}` consulta um evento individual.
 
+## Consulta de saldos de estoque
+
+Os endpoints `GET /api/estoques` e `GET /api/estoques/{id}` são somente leitura.
+Os saldos são criados e atualizados pelos fluxos operacionais, como recebimentos,
+movimentações e ajustes de inventário; não podem ser alterados diretamente pela API
+de consulta.
+
 ---
 
 ## 🛑 Gerenciamento do Ambiente

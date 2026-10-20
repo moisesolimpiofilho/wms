@@ -15,7 +15,6 @@ import com.wms.domain.cadastros.Segmento;
 import com.wms.domain.cadastros.UnidadeMedida;
 import com.wms.domain.estoque.Armazem;
 import com.wms.domain.estoque.CentroDistribuicao;
-import com.wms.domain.estoque.Estoque;
 import com.wms.domain.estoque.LocalEstoque;
 import com.wms.domain.estoque.TipoLocal;
 import com.wms.domain.estoque.ZonaArmazenagem;
@@ -123,6 +122,24 @@ class CrudEndpointsIntegrationTest {
                         .content("{}"))
                 .andExpect(status().isMethodNotAllowed());
         mockMvc.perform(delete("/api/movimentacoes-estoque/1"))
+                .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void stockBalancesCanOnlyBeReadThroughTheirApi() throws Exception {
+        mockMvc.perform(get("/api/estoques"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/estoques/1"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/estoques")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(put("/api/estoques/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(delete("/api/estoques/1"))
                 .andExpect(status().isMethodNotAllowed());
     }
 
@@ -540,7 +557,7 @@ class CrudEndpointsIntegrationTest {
             assertOperationHasEntityDocumentation(itemPath.path("put"), endpoint.path() + "/{id} PUT", endpoint.path());
             assertOperationHasEntityDocumentation(itemPath.path("delete"), endpoint.path() + "/{id} DELETE", endpoint.path());
         }
-        assertEquals(28, entityEndpoints().count());
+        assertEquals(27, entityEndpoints().count());
         JsonNode auditCollectionPath = paths.path("/api/logs-transacao");
         JsonNode auditItemPath = paths.path("/api/logs-transacao/{id}");
         assertTrue(auditCollectionPath.has("get"));
@@ -548,6 +565,14 @@ class CrudEndpointsIntegrationTest {
         assertFalse(auditCollectionPath.has("post"));
         assertFalse(auditItemPath.has("put"));
         assertFalse(auditItemPath.has("delete"));
+
+        JsonNode stockCollectionPath = paths.path("/api/estoques");
+        JsonNode stockItemPath = paths.path("/api/estoques/{id}");
+        assertTrue(stockCollectionPath.has("get"));
+        assertFalse(stockCollectionPath.has("post"));
+        assertTrue(stockItemPath.has("get"));
+        assertFalse(stockItemPath.has("put"));
+        assertFalse(stockItemPath.has("delete"));
     }
 
     @Test
@@ -747,7 +772,6 @@ class CrudEndpointsIntegrationTest {
                 new Endpoint(UnidadeMedida.class, "/api/unidades-medida"),
                 new Endpoint(Armazem.class, "/api/armazens"),
                 new Endpoint(CentroDistribuicao.class, "/api/centros-distribuicao"),
-                new Endpoint(Estoque.class, "/api/estoques"),
                 new Endpoint(LocalEstoque.class, "/api/locais-estoque"),
                 new Endpoint(TipoLocal.class, "/api/tipos-local"),
                 new Endpoint(ZonaArmazenagem.class, "/api/zonas-armazenagem"),
